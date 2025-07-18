@@ -1,12 +1,7 @@
-// client/src/App.jsx
-import LoginPage from './pages/LoginPage';
+import ChatPage from './pages/ChatPage';
 
 function App() {
-  return (
-    <div>
-      <LoginPage />
-    </div>
-  );
+  return <ChatPage />;
 }
 
 export default App;

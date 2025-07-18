@@ -1,10 +1,8 @@
 import { io } from 'socket.io-client';
 import { useEffect, useState } from 'react';
 
-// Socket.io connection URL
 const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || 'http://localhost:5000';
 
-// Create socket instance
 export const socket = io(SOCKET_URL, {
   autoConnect: false,
   reconnection: true,
@@ -12,7 +10,6 @@ export const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000,
 });
 
-// Login API
 export const login = async (username) => {
   const res = await fetch(`${SOCKET_URL}/api/login`, {
     method: 'POST',
@@ -28,7 +25,6 @@ export const login = async (username) => {
   return await res.json();
 };
 
-// Custom hook for using socket.io
 export const useSocket = () => {
   const [isConnected, setIsConnected] = useState(socket.connected);
   const [lastMessage, setLastMessage] = useState(null);
@@ -42,20 +38,16 @@ export const useSocket = () => {
     socket.emit('user_join', username);
   };
 
-  const disconnect = () => {
-    socket.disconnect();
-  };
-
-  const sendMessage = (message) => {
-    socket.emit('send_message', { message });
+  const sendMessage = ({ room, message }) => {
+    socket.emit('send_message', { room, message });
   };
 
   const sendPrivateMessage = (to, message) => {
     socket.emit('private_message', { to, message });
   };
 
-  const setTyping = (isTyping) => {
-    socket.emit('typing', isTyping);
+  const setTyping = ({ isTyping, room }) => {
+    socket.emit('typing', { isTyping, room });
   };
 
   useEffect(() => {
@@ -80,7 +72,7 @@ export const useSocket = () => {
         {
           id: Date.now(),
           system: true,
-          message: `${user.username} joined the chat`,
+          message: `${user.username} joined`,
           timestamp: new Date().toISOString(),
         },
       ]);
@@ -92,18 +84,14 @@ export const useSocket = () => {
         {
           id: Date.now(),
           system: true,
-          message: `${user.username} left the chat`,
+          message: `${user.username} left`,
           timestamp: new Date().toISOString(),
         },
       ]);
     });
 
-    socket.on('typing_users', (users) => setTypingUsers(users));
-
-    socket.on('user_error', (errMsg) => {
-      setError(errMsg);
-      console.error('User error:', errMsg);
-    });
+    socket.on('typing_users', (usersTyping) => setTypingUsers(usersTyping));
+    socket.on('user_error', (errMsg) => setError(errMsg));
 
     return () => {
       socket.off('connect');
@@ -127,11 +115,8 @@ export const useSocket = () => {
     typingUsers,
     error,
     connect,
-    disconnect,
     sendMessage,
     sendPrivateMessage,
     setTyping,
   };
 };
-
-export default socket;
