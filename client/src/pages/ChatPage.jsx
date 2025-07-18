@@ -10,7 +10,8 @@ const ChatPage = () => {
     setTyping,
     messages,
     users,
-    typingUsers
+    typingUsers,
+    notifications
   } = useSocket();
 
   const [username, setUsername] = useState('');
@@ -69,6 +70,13 @@ const ChatPage = () => {
       ) : (
         <div>
           <h2>Room: {room}</h2>
+
+          {/* 🔔 Show Notifications */}
+          {notifications.map((n) => (
+            <p key={n.id} style={{ background: '#e0ffe0', padding: 5 }}>
+              🔔 {n.message}
+            </p>
+          ))}
 
           <div style={{ border: '1px solid #ccc', padding: 10, height: 300, overflowY: 'auto' }}>
             {messages

@@ -31,6 +31,7 @@ export const useSocket = () => {
   const [messages, setMessages] = useState([]);
   const [users, setUsers] = useState([]);
   const [typingUsers, setTypingUsers] = useState([]);
+  const [notifications, setNotifications] = useState([]);
   const [error, setError] = useState(null);
 
   const connect = (username) => {
@@ -90,6 +91,11 @@ export const useSocket = () => {
       ]);
     });
 
+    // ✅ Handle notification events
+    socket.on('notification', (msg) => {
+      setNotifications((prev) => [...prev, { id: Date.now(), message: msg }]);
+    });
+
     socket.on('typing_users', (usersTyping) => setTypingUsers(usersTyping));
     socket.on('user_error', (errMsg) => setError(errMsg));
 
@@ -101,6 +107,7 @@ export const useSocket = () => {
       socket.off('user_list');
       socket.off('user_joined');
       socket.off('user_left');
+      socket.off('notification');
       socket.off('typing_users');
       socket.off('user_error');
     };
@@ -113,6 +120,7 @@ export const useSocket = () => {
     messages,
     users,
     typingUsers,
+    notifications,
     error,
     connect,
     sendMessage,
