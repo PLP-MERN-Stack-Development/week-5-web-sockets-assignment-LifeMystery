@@ -1,5 +1,3 @@
-// socket.js - Socket.io client setup
-
 import { io } from 'socket.io-client';
 import { useEffect, useState } from 'react';
 
@@ -14,6 +12,22 @@ export const socket = io(SOCKET_URL, {
   reconnectionDelay: 1000,
 });
 
+// Login API
+export const login = async (username) => {
+  const res = await fetch(`${SOCKET_URL}/api/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username }),
+  });
+
+  if (!res.ok) {
+    const error = await res.json();
+    throw new Error(error.error || 'Login failed');
+  }
+
+  return await res.json();
+};
+
 // Custom hook for using socket.io
 export const useSocket = () => {
   const [isConnected, setIsConnected] = useState(socket.connected);
@@ -21,64 +35,46 @@ export const useSocket = () => {
   const [messages, setMessages] = useState([]);
   const [users, setUsers] = useState([]);
   const [typingUsers, setTypingUsers] = useState([]);
+  const [error, setError] = useState(null);
 
-  // Connect to socket server
   const connect = (username) => {
     socket.connect();
-    if (username) {
-      socket.emit('user_join', username);
-    }
+    socket.emit('user_join', username);
   };
 
-  // Disconnect from socket server
   const disconnect = () => {
     socket.disconnect();
   };
 
-  // Send a message
   const sendMessage = (message) => {
     socket.emit('send_message', { message });
   };
 
-  // Send a private message
   const sendPrivateMessage = (to, message) => {
     socket.emit('private_message', { to, message });
   };
 
-  // Set typing status
   const setTyping = (isTyping) => {
     socket.emit('typing', isTyping);
   };
 
-  // Socket event listeners
   useEffect(() => {
-    // Connection events
-    const onConnect = () => {
-      setIsConnected(true);
-    };
+    socket.on('connect', () => setIsConnected(true));
+    socket.on('disconnect', () => setIsConnected(false));
 
-    const onDisconnect = () => {
-      setIsConnected(false);
-    };
-
-    // Message events
-    const onReceiveMessage = (message) => {
+    socket.on('receive_message', (message) => {
       setLastMessage(message);
       setMessages((prev) => [...prev, message]);
-    };
+    });
 
-    const onPrivateMessage = (message) => {
+    socket.on('private_message', (message) => {
       setLastMessage(message);
       setMessages((prev) => [...prev, message]);
-    };
+    });
 
-    // User events
-    const onUserList = (userList) => {
-      setUsers(userList);
-    };
+    socket.on('user_list', (userList) => setUsers(userList));
 
-    const onUserJoined = (user) => {
-      // You could add a system message here
+    socket.on('user_joined', (user) => {
       setMessages((prev) => [
         ...prev,
         {
@@ -88,10 +84,9 @@ export const useSocket = () => {
           timestamp: new Date().toISOString(),
         },
       ]);
-    };
+    });
 
-    const onUserLeft = (user) => {
-      // You could add a system message here
+    socket.on('user_left', (user) => {
       setMessages((prev) => [
         ...prev,
         {
@@ -101,33 +96,25 @@ export const useSocket = () => {
           timestamp: new Date().toISOString(),
         },
       ]);
-    };
+    });
 
-    // Typing events
-    const onTypingUsers = (users) => {
-      setTypingUsers(users);
-    };
+    socket.on('typing_users', (users) => setTypingUsers(users));
 
-    // Register event listeners
-    socket.on('connect', onConnect);
-    socket.on('disconnect', onDisconnect);
-    socket.on('receive_message', onReceiveMessage);
-    socket.on('private_message', onPrivateMessage);
-    socket.on('user_list', onUserList);
-    socket.on('user_joined', onUserJoined);
-    socket.on('user_left', onUserLeft);
-    socket.on('typing_users', onTypingUsers);
+    socket.on('user_error', (errMsg) => {
+      setError(errMsg);
+      console.error('User error:', errMsg);
+    });
 
-    // Clean up event listeners
     return () => {
-      socket.off('connect', onConnect);
-      socket.off('disconnect', onDisconnect);
-      socket.off('receive_message', onReceiveMessage);
-      socket.off('private_message', onPrivateMessage);
-      socket.off('user_list', onUserList);
-      socket.off('user_joined', onUserJoined);
-      socket.off('user_left', onUserLeft);
-      socket.off('typing_users', onTypingUsers);
+      socket.off('connect');
+      socket.off('disconnect');
+      socket.off('receive_message');
+      socket.off('private_message');
+      socket.off('user_list');
+      socket.off('user_joined');
+      socket.off('user_left');
+      socket.off('typing_users');
+      socket.off('user_error');
     };
   }, []);
 
@@ -138,6 +125,7 @@ export const useSocket = () => {
     messages,
     users,
     typingUsers,
+    error,
     connect,
     disconnect,
     sendMessage,
@@ -146,4 +134,4 @@ export const useSocket = () => {
   };
 };
 
-export default socket; 
+export default socket;

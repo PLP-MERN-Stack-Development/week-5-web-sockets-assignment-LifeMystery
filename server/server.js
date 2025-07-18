@@ -26,24 +26,35 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// Store connected users and messages
-const users = {};
+// In-memory stores
+const users = {}; // socket.id -> { username, online, lastSeen }
 const messages = [];
 const typingUsers = {};
+const registeredUsers = {}; // username -> { username }
 
-// Socket.io connection handler
+// --- Socket.io connection logic ---
 io.on('connection', (socket) => {
   console.log(`User connected: ${socket.id}`);
 
-  // Handle user joining
   socket.on('user_join', (username) => {
-    users[socket.id] = { username, id: socket.id };
+    if (!username || Object.values(users).some(u => u.username === username)) {
+      socket.emit('user_error', 'Username taken or invalid');
+      return;
+    }
+
+    const user = {
+      id: socket.id,
+      username,
+      online: true,
+      lastSeen: null,
+    };
+
+    users[socket.id] = user;
     io.emit('user_list', Object.values(users));
-    io.emit('user_joined', { username, id: socket.id });
+    io.emit('user_joined', user);
     console.log(`${username} joined the chat`);
   });
 
-  // Handle chat messages
   socket.on('send_message', (messageData) => {
     const message = {
       ...messageData,
@@ -52,33 +63,25 @@ io.on('connection', (socket) => {
       senderId: socket.id,
       timestamp: new Date().toISOString(),
     };
-    
+
     messages.push(message);
-    
-    // Limit stored messages to prevent memory issues
-    if (messages.length > 100) {
-      messages.shift();
-    }
-    
+    if (messages.length > 100) messages.shift();
     io.emit('receive_message', message);
   });
 
-  // Handle typing indicator
   socket.on('typing', (isTyping) => {
-    if (users[socket.id]) {
-      const username = users[socket.id].username;
-      
-      if (isTyping) {
-        typingUsers[socket.id] = username;
-      } else {
-        delete typingUsers[socket.id];
-      }
-      
-      io.emit('typing_users', Object.values(typingUsers));
+    const username = users[socket.id]?.username;
+    if (!username) return;
+
+    if (isTyping) {
+      typingUsers[socket.id] = username;
+    } else {
+      delete typingUsers[socket.id];
     }
+
+    io.emit('typing_users', Object.values(typingUsers));
   });
 
-  // Handle private messages
   socket.on('private_message', ({ to, message }) => {
     const messageData = {
       id: Date.now(),
@@ -88,28 +91,26 @@ io.on('connection', (socket) => {
       timestamp: new Date().toISOString(),
       isPrivate: true,
     };
-    
+
     socket.to(to).emit('private_message', messageData);
     socket.emit('private_message', messageData);
   });
 
-  // Handle disconnection
   socket.on('disconnect', () => {
-    if (users[socket.id]) {
-      const { username } = users[socket.id];
-      io.emit('user_left', { username, id: socket.id });
-      console.log(`${username} left the chat`);
+    const user = users[socket.id];
+    if (user) {
+      user.online = false;
+      user.lastSeen = new Date().toISOString();
+      io.emit('user_left', user);
+      io.emit('user_list', Object.values(users));
+      console.log(`${user.username} left the chat`);
     }
-    
-    delete users[socket.id];
+
     delete typingUsers[socket.id];
-    
-    io.emit('user_list', Object.values(users));
-    io.emit('typing_users', Object.values(typingUsers));
   });
 });
 
-// API routes
+// --- REST API Routes ---
 app.get('/api/messages', (req, res) => {
   res.json(messages);
 });
@@ -118,7 +119,21 @@ app.get('/api/users', (req, res) => {
   res.json(Object.values(users));
 });
 
-// Root route
+app.post('/api/login', (req, res) => {
+  const { username } = req.body;
+
+  if (!username || typeof username !== 'string') {
+    return res.status(400).json({ error: 'Username is required' });
+  }
+
+  if (Object.values(users).find(u => u.username === username && u.online)) {
+    return res.status(409).json({ error: 'Username is already taken' });
+  }
+
+  registeredUsers[username] = { username };
+  res.json({ success: true, username });
+});
+
 app.get('/', (req, res) => {
   res.send('Socket.io Chat Server is running');
 });
@@ -129,4 +144,4 @@ server.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
 });
 
-module.exports = { app, server, io }; 
+module.exports = { app, server, io };
